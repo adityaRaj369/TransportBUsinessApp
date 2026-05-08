@@ -1,0 +1,26 @@
+export const products = [
+  {
+    id: 1,
+    name: "1121 RAW BASMATI RICE",
+    category: "Basmati Rice",
+    description: "Premium long-grain basmati rice, aged for 2 years to perfection. Known for its exquisite aroma and extra-long grains.",
+    features: ["Aged 2 Years", "Non-Sticky", "Aromatic", "Extra Long Grain"],
+    image: "/basmati_rice_premium.png"
+  },
+  {
+    id: 2,
+    name: "1718 STEAM BASMATI RICE",
+    category: "Basmati Rice",
+    description: "Steam processed to retain nutritional value while ensuring a firm texture and delightful taste.",
+    features: ["Steam Processed", "High Fiber", "Uniform Grain", "Great Taste"],
+    image: "/basmati_rice_premium.png"
+  },
+  {
+    id: 3,
+    name: "SUGANDHA GOLDEN SELLA RICE",
+    category: "Non-Basmati Rice",
+    description: "Premium quality non-basmati rice with a golden hue and excellent cooking characteristics.",
+    features: ["Golden Hue", "Economical", "Parboiled", "Daily Consumption"],
+    image: "/basmati_rice_premium.png"
+  }
+];

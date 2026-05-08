@@ -1,0 +1,37 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Navigate to the project directory
+            cd /home/${{ secrets.EC2_USER }}/phoenix-eximm
+            
+            # Pull the latest code
+            git pull origin main
+            
+            # Create/Update .env file in backend directory
+            echo "MONGO_URI=${{ secrets.MONGO_URI }}" > backend/.env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> backend/.env
+            echo "ADMIN_USER=${{ secrets.ADMIN_USER }}" >> backend/.env
+            echo "ADMIN_PASS=${{ secrets.ADMIN_PASS }}" >> backend/.env
+            
+            # Build and restart Docker containers
+            docker-compose down
+            docker-compose up -d --build
