@@ -13,6 +13,15 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "."
+          target: "/home/${{ secrets.EC2_USER }}/phoenix-eximm"
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@master
         with:
@@ -22,9 +31,6 @@ jobs:
           script: |
             # Navigate to the project directory
             cd /home/${{ secrets.EC2_USER }}/phoenix-eximm
-            
-            # Pull the latest code
-            git pull origin main
             
             # Create/Update .env file in backend directory
             echo "MONGO_URI=${{ secrets.MONGO_URI }}" > backend/.env
