@@ -4,37 +4,72 @@ import { Save, CheckCircle } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || '';
 
+const DEFAULTS = {
+  // Hero
+  heroTagline: 'GLOBAL TRADING EXCELLENCE',
+  heroTitle: 'Pioneering the Future of Global Trade',
+  heroSubtitle: 'PhoenixEximm connects the finest Indian produce with the world. Uncompromising quality, seamless logistics, and trusted global partnerships.',
+  // About
+  aboutText: 'Founded on the principles of integrity and excellence, PhoenixEximm has emerged as a leader in the Indian export market.',
+  aboutFeature1: 'Sustainable Sourcing',
+  aboutFeature2: 'Direct from Farmers',
+  aboutFeature3: 'Advanced Processing',
+  aboutFeature4: 'Global Certifications',
+  aboutFeature5: 'Custom Packaging',
+  aboutFeature6: 'Timely Delivery',
+  // Quality Cards
+  quality1Title: 'Quality Tested',
+  quality1Desc: 'Rigorous testing in ISO-certified labs for purity and grain length.',
+  quality2Title: 'Pesticide Free',
+  quality2Desc: 'Compliance with international safety standards and organic options.',
+  quality3Title: 'Secure Logistics',
+  quality3Desc: 'Moisture-controlled transport to preserve freshness and aroma.',
+  quality4Title: 'Global Standards',
+  quality4Desc: 'Certified by APEDA and major global food safety organizations.',
+  // Stats
+  stat1Val: '45+',  stat1Label: 'Countries Served',
+  stat2Val: '12k',  stat2Label: 'Tons Shipped',
+  stat3Val: '99%',  stat3Label: 'On-Time Delivery',
+  stat4Val: '24/7', stat4Label: 'Global Support',
+  // Contact & Footer
+  contactPhone: '+91 98765 43210',
+  contactEmail: 'export@phoenixeximm.com',
+  contactAddress: 'Mumbai, India',
+  corporateEmail: 'info@phoenixeximm.com',
+  corporateAddress: 'Nariman Point, Mumbai',
+};
+
+const Field = ({ label, value, onChange, type = 'input', rows = 3 }) => (
+  <div>
+    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">{label}</label>
+    {type === 'textarea'
+      ? <textarea rows={rows} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none resize-none" value={value} onChange={onChange} />
+      : <input className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" value={value} onChange={onChange} />
+    }
+  </div>
+);
+
+const Section = ({ title, children }) => (
+  <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-100">
+    <h3 className="text-base font-bold text-[#001f3f] mb-6 pb-4 border-b border-gray-100">{title}</h3>
+    <div className="grid grid-cols-1 gap-5">{children}</div>
+  </div>
+);
+
 export default function SettingsManager() {
   const { token } = useAuth();
-  const [settings, setSettings] = useState({
-    heroTitle: 'Pioneering the Future of Global Trade',
-    heroSubtitle: 'PhoenixEximm connects the finest Indian produce with the world. Uncompromising quality, seamless logistics, and trusted global partnerships.',
-    heroTagline: 'GLOBAL TRADING EXCELLENCE',
-    aboutText: 'Founded on the principles of integrity and excellence, PhoenixEximm has emerged as a leader in the Indian export market. We specialize in sourcing the highest grade agricultural products and delivering them across continents.',
-    contactPhone: '+91 98765 43210',
-    contactEmail: 'export@phoenixeximm.com',
-    contactAddress: 'Mumbai, India',
-    corporateEmail: 'info@phoenixeximm.com',
-    corporateAddress: 'Nariman Point, Mumbai'
-  });
+  const [settings, setSettings] = useState(DEFAULTS);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
 
-  const fetchSettings = async () => {
-    try {
-      const res = await fetch(`${API}/api/settings`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Object.keys(data).length > 0) {
-          setSettings(prev => ({ ...prev, ...data }));
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  useEffect(() => {
+    fetch(`${API}/api/settings`)
+      .then(r => r.ok ? r.json() : {})
+      .then(data => { if (Object.keys(data).length > 0) setSettings(prev => ({ ...prev, ...data })); })
+      .catch(console.error);
+  }, []);
 
-  useEffect(() => { fetchSettings(); }, []);
+  const set = (key) => (e) => setSettings(prev => ({ ...prev, [key]: e.target.value }));
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -42,19 +77,11 @@ export default function SettingsManager() {
     try {
       const res = await fetch(`${API}/api/settings`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(settings)
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
       });
-      if (res.ok) {
-        setToast('Settings updated successfully!');
-        setTimeout(() => setToast(''), 3000);
-      }
-    } catch (err) {
-      console.error(err);
-    }
+      if (res.ok) { setToast('Settings saved!'); setTimeout(() => setToast(''), 3000); }
+    } catch (err) { console.error(err); }
     setSaving(false);
   };
 
@@ -66,114 +93,76 @@ export default function SettingsManager() {
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h2 className="text-2xl font-bold text-[#001f3f]">Global Settings</h2>
-          <p className="text-gray-500 text-sm">Manage website content and contact information</p>
-        </div>
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-[#001f3f]">Global Settings</h2>
+        <p className="text-gray-500 text-sm">All website content is controlled from here</p>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-8">
-        {/* Hero Section */}
-        <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-100">
-          <h3 className="text-lg font-bold text-[#001f3f] mb-6 border-b pb-4">Hero & Branding</h3>
-          <div className="grid grid-cols-1 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Hero Tagline</label>
-              <input 
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" 
-                value={settings.heroTagline} 
-                onChange={e => setSettings({ ...settings, heroTagline: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Hero Main Title</label>
-              <input 
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" 
-                value={settings.heroTitle} 
-                onChange={e => setSettings({ ...settings, heroTitle: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Hero Subtitle / Description</label>
-              <textarea 
-                rows={3}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" 
-                value={settings.heroSubtitle} 
-                onChange={e => setSettings({ ...settings, heroSubtitle: e.target.value })}
-              />
-            </div>
-          </div>
-        </div>
+      <form onSubmit={handleSave} className="space-y-6">
 
-        {/* About Section */}
-        <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-100">
-          <h3 className="text-lg font-bold text-[#001f3f] mb-6 border-b pb-4">About Section</h3>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Company Description</label>
-            <textarea 
-              rows={4}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" 
-              value={settings.aboutText} 
-              onChange={e => setSettings({ ...settings, aboutText: e.target.value })}
-            />
-          </div>
-        </div>
+        {/* Hero */}
+        <Section title="🏠 Hero Section">
+          <Field label="Tagline (small text above title)" value={settings.heroTagline} onChange={set('heroTagline')} />
+          <Field label="Main Title" value={settings.heroTitle} onChange={set('heroTitle')} />
+          <Field label="Subtitle / Description" value={settings.heroSubtitle} onChange={set('heroSubtitle')} type="textarea" />
+        </Section>
 
-        {/* Contact Info */}
-        <div className="bg-white rounded-2xl shadow-sm p-8 border border-gray-100">
-          <h3 className="text-lg font-bold text-[#001f3f] mb-6 border-b pb-4">Contact & Location</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Inquiry Phone</label>
-              <input 
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" 
-                value={settings.contactPhone} 
-                onChange={e => setSettings({ ...settings, contactPhone: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Inquiry Email</label>
-              <input 
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" 
-                value={settings.contactEmail} 
-                onChange={e => setSettings({ ...settings, contactEmail: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Location City/Country</label>
-              <input 
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" 
-                value={settings.contactAddress} 
-                onChange={e => setSettings({ ...settings, contactAddress: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Corporate Email (Footer)</label>
-              <input 
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" 
-                value={settings.corporateEmail} 
-                onChange={e => setSettings({ ...settings, corporateEmail: e.target.value })}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-bold text-gray-700 mb-2">Detailed Corporate Address (Footer)</label>
-              <input 
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#D4AF37] outline-none" 
-                value={settings.corporateAddress} 
-                onChange={e => setSettings({ ...settings, corporateAddress: e.target.value })}
-              />
-            </div>
+        {/* About */}
+        <Section title="📖 About Section">
+          <Field label="Company Description" value={settings.aboutText} onChange={set('aboutText')} type="textarea" rows={4} />
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Feature 1" value={settings.aboutFeature1} onChange={set('aboutFeature1')} />
+            <Field label="Feature 2" value={settings.aboutFeature2} onChange={set('aboutFeature2')} />
+            <Field label="Feature 3" value={settings.aboutFeature3} onChange={set('aboutFeature3')} />
+            <Field label="Feature 4" value={settings.aboutFeature4} onChange={set('aboutFeature4')} />
+            <Field label="Feature 5" value={settings.aboutFeature5} onChange={set('aboutFeature5')} />
+            <Field label="Feature 6" value={settings.aboutFeature6} onChange={set('aboutFeature6')} />
           </div>
-        </div>
+        </Section>
 
-        <div className="flex justify-end">
-          <button 
-            type="submit" 
-            disabled={saving}
-            className="flex items-center gap-2 bg-[#001f3f] text-white px-8 py-4 rounded-xl font-bold hover:bg-[#003366] transition-all disabled:opacity-50"
-          >
-            <Save size={20} /> {saving ? 'Saving...' : 'Save Settings'}
+        {/* Quality Cards */}
+        <Section title="⭐ Quality Section — Cards">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Card 1 Title" value={settings.quality1Title} onChange={set('quality1Title')} />
+            <Field label="Card 1 Description" value={settings.quality1Desc} onChange={set('quality1Desc')} />
+            <Field label="Card 2 Title" value={settings.quality2Title} onChange={set('quality2Title')} />
+            <Field label="Card 2 Description" value={settings.quality2Desc} onChange={set('quality2Desc')} />
+            <Field label="Card 3 Title" value={settings.quality3Title} onChange={set('quality3Title')} />
+            <Field label="Card 3 Description" value={settings.quality3Desc} onChange={set('quality3Desc')} />
+            <Field label="Card 4 Title" value={settings.quality4Title} onChange={set('quality4Title')} />
+            <Field label="Card 4 Description" value={settings.quality4Desc} onChange={set('quality4Desc')} />
+          </div>
+        </Section>
+
+        {/* Stats */}
+        <Section title="📊 Stats Bar">
+          <div className="grid grid-cols-4 gap-4">
+            <Field label="Stat 1 Value" value={settings.stat1Val} onChange={set('stat1Val')} />
+            <Field label="Stat 1 Label" value={settings.stat1Label} onChange={set('stat1Label')} />
+            <Field label="Stat 2 Value" value={settings.stat2Val} onChange={set('stat2Val')} />
+            <Field label="Stat 2 Label" value={settings.stat2Label} onChange={set('stat2Label')} />
+            <Field label="Stat 3 Value" value={settings.stat3Val} onChange={set('stat3Val')} />
+            <Field label="Stat 3 Label" value={settings.stat3Label} onChange={set('stat3Label')} />
+            <Field label="Stat 4 Value" value={settings.stat4Val} onChange={set('stat4Val')} />
+            <Field label="Stat 4 Label" value={settings.stat4Label} onChange={set('stat4Label')} />
+          </div>
+        </Section>
+
+        {/* Contact */}
+        <Section title="📞 Contact & Footer">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Phone" value={settings.contactPhone} onChange={set('contactPhone')} />
+            <Field label="Inquiry Email" value={settings.contactEmail} onChange={set('contactEmail')} />
+            <Field label="Address / City" value={settings.contactAddress} onChange={set('contactAddress')} />
+            <Field label="Corporate Email (Footer)" value={settings.corporateEmail} onChange={set('corporateEmail')} />
+          </div>
+          <Field label="Full Corporate Address (Footer)" value={settings.corporateAddress} onChange={set('corporateAddress')} />
+        </Section>
+
+        <div className="flex justify-end pt-2">
+          <button type="submit" disabled={saving}
+            className="flex items-center gap-2 bg-[#001f3f] text-white px-10 py-4 rounded-xl font-bold hover:bg-[#003366] transition-all disabled:opacity-50">
+            <Save size={18} /> {saving ? 'Saving...' : 'Save All Settings'}
           </button>
         </div>
       </form>

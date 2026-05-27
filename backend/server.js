@@ -4,12 +4,20 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const mongoose = require('mongoose');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_123');
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-const FROM_EMAIL = process.env.FROM_EMAIL || 'onboarding@resend.dev';
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_APP_PASS = process.env.GMAIL_APP_PASS;
+
+// Create Gmail transporter (only if credentials are set)
+const transporter = (GMAIL_USER && GMAIL_APP_PASS)
+  ? nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: GMAIL_USER, pass: GMAIL_APP_PASS },
+    })
+  : null;
 
 const Product = require('./models/Product');
 const Inquiry = require('./models/Inquiry');
@@ -136,31 +144,42 @@ app.post('/api/inquiry', async (req, res) => {
     const newInquiry = new Inquiry({ name, email, phone, message, product });
     await newInquiry.save();
 
-    if (process.env.RESEND_API_KEY && ADMIN_EMAIL) {
+    if (transporter && ADMIN_EMAIL) {
       try {
-        await resend.emails.send({
-          from: `PhoenixEximm <${FROM_EMAIL}>`,
+        // Notify admin
+        await transporter.sendMail({
+          from: `"PhoenixEximm" <${GMAIL_USER}>`,
           to: ADMIN_EMAIL,
           subject: `New Inquiry from ${name}`,
-          html: `<p><strong>Name:</strong> ${name}</p>
-                 <p><strong>Email:</strong> ${email}</p>
-                 <p><strong>Phone:</strong> ${phone}</p>
-                 <p><strong>Product:</strong> ${product}</p>
-                 <p><strong>Message:</strong></p><p>${message}</p>`
+          html: `
+            <h2 style="color:#D4AF37">New Inquiry Received</h2>
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Phone:</strong> ${phone}</p>
+            <p><strong>Interested In:</strong> ${product}</p>
+            <p><strong>Message:</strong></p>
+            <p>${message}</p>
+          `,
         });
 
-        await resend.emails.send({
-          from: `PhoenixEximm <${FROM_EMAIL}>`,
-          to: email,
-          subject: `Thank you for your inquiry, ${name}!`,
-          html: `<p>Hi ${name},</p>
-                 <p>Thank you for reaching out to PhoenixEximm regarding <strong>${product}</strong>.</p>
-                 <p>We have received your inquiry and our team will get back to you shortly.</p>
-                 <br/>
-                 <p>Best regards,<br/>PhoenixEximm Team</p>`
-        });
+        // Auto-reply to customer
+        if (email) {
+          await transporter.sendMail({
+            from: `"PhoenixEximm" <${GMAIL_USER}>`,
+            to: email,
+            subject: `Thank you for your inquiry, ${name}!`,
+            html: `
+              <h2 style="color:#D4AF37">Thank You for Reaching Out!</h2>
+              <p>Hi ${name},</p>
+              <p>Thank you for your interest in <strong>${product}</strong>.</p>
+              <p>We have received your inquiry and our team will get back to you within 24 hours.</p>
+              <br/>
+              <p>Best regards,<br/><strong>PhoenixEximm Team</strong></p>
+            `,
+          });
+        }
       } catch (emailErr) {
-        console.error('Error sending emails:', emailErr);
+        console.error('Email sending error:', emailErr.message);
       }
     }
 
