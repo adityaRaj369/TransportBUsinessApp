@@ -13,6 +13,17 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      - name: Fix permissions on EC2 before copying
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Ensure the directory exists and fix permissions so scp can overwrite files
+            sudo mkdir -p /home/${{ secrets.EC2_USER }}/phoenix-eximm
+            sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /home/${{ secrets.EC2_USER }}/phoenix-eximm
+
       - name: Copy files to EC2
         uses: appleboy/scp-action@master
         with:
