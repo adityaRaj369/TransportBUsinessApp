@@ -27,6 +27,10 @@ jobs:
               cd ..
               sudo rm -rf phoenix-eximm
             fi
+            
+            # CRITICAL: Clean up old Docker images to free up disk space!
+            sudo docker system prune -af
+            
             mkdir -p /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
       - name: Copy files to EC2
