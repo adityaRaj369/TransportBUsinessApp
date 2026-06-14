@@ -22,6 +22,11 @@ body {
   overflow-x: hidden;
 }
 
+/* Fix input text visibility inside white admin modals */
+input:not(.text-white), textarea:not(.text-white), select:not(.text-white) {
+  color: #1C1C1C;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #0A0A0A; }
