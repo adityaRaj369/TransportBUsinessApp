@@ -31,6 +31,11 @@ jobs:
             # CRITICAL: Clean up old Docker images to free up disk space!
             sudo docker system prune -af
             
+            # Additional cleanup to aggressively free up disk space
+            sudo journalctl --vacuum-time=1d
+            sudo apt-get clean
+            sudo rm -rf /tmp/*
+            
             mkdir -p /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
       - name: Copy files to EC2
