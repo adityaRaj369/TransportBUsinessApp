@@ -75,7 +75,7 @@ jobs:
 
             # Configure Nginx reverse proxy
             echo 'server {' | sudo tee /etc/nginx/sites-available/phoenixeximm
-            echo '    listen 80;' | sudo tee -a /etc/nginx/sites-available/phoenixeximm
+            echo '    listen 80 default_server;' | sudo tee -a /etc/nginx/sites-available/phoenixeximm
             echo '    server_name phoenixeximm.com www.phoenixeximm.com;' | sudo tee -a /etc/nginx/sites-available/phoenixeximm
             echo '    location / {' | sudo tee -a /etc/nginx/sites-available/phoenixeximm
             echo '        proxy_pass http://127.0.0.1:8080;' | sudo tee -a /etc/nginx/sites-available/phoenixeximm
