@@ -11,21 +11,26 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Fix permissions on EC2 before copying
-        uses: appleboy/ssh-action@master
+      - name: Prepare EC2 directory
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Ensure the directory exists and fix permissions so scp can overwrite files
-            sudo mkdir -p /home/${{ secrets.EC2_USER }}/phoenix-eximm
-            sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /home/${{ secrets.EC2_USER }}/phoenix-eximm
+            # Stop existing containers and remove the old directory to ensure a clean copy
+            if [ -d /home/${{ secrets.EC2_USER }}/phoenix-eximm ]; then
+              cd /home/${{ secrets.EC2_USER }}/phoenix-eximm
+              sudo docker compose down || true
+              cd ..
+              sudo rm -rf phoenix-eximm
+            fi
+            mkdir -p /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
       - name: Copy files to EC2
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -34,7 +39,7 @@ jobs:
           target: "/home/${{ secrets.EC2_USER }}/phoenix-eximm"
 
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
