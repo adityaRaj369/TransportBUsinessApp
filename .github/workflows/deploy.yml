@@ -38,13 +38,16 @@ jobs:
             
             mkdir -p /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
+      - name: Delete .git directory before copy
+        run: rm -rf .git
+        
       - name: Copy files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "*,!**/.git/**"
+          source: "."
           target: "/home/${{ secrets.EC2_USER }}/phoenix-eximm"
 
       - name: Deploy to EC2
