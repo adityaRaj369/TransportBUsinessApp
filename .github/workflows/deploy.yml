@@ -79,18 +79,31 @@ jobs:
 
             cp .env backend/.env
 
-            # Free RAM before builds (small EC2 OOM kills docker compose)
+            # Tiny EC2 (~1GB RAM): add swap so vite build doesn't get OOM-killed
+            if [ ! -f /swapfile ]; then
+              sudo fallocate -l 1G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+            fi
+            sudo swapon /swapfile || true
+
             sudo sync || true
             echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null || true
             sudo docker compose down || true
             df -h
+            free -h
 
-            # Start mongo first (pull while disk is free), then build apps one-by-one
+            # Pull/start mongo only to cache the image, then STOP it before builds
             export COMPOSE_PARALLEL_LIMIT=1
+            sudo docker compose pull mongodb
             sudo docker compose up -d mongodb
+            sudo docker compose stop mongodb
+
             sudo docker compose build backend
             echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null || true
             sudo docker compose build frontend
+
+            # Now start everything with builds already done
             sudo docker compose up -d
 
             sleep 8
