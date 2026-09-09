@@ -67,7 +67,28 @@ jobs:
               exit 1
             fi
 
-            # Write .env for container env_file (no Compose ${} re-interpolation of Atlas URI)
+            # Atlas cluster in the secret is dead (DNS NXDOMAIN). Use local Docker Mongo so the site works.
+            # When you create a new Atlas cluster, put the new URI in the secret and we can switch back.
+            EFFECTIVE_MONGO_URI="mongodb://mongodb:27017/phoenixeximm"
+            case "$DEPLOY_MONGO_URI" in
+              mongodb://mongodb:*|mongodb://localhost:*|mongodb://127.0.0.1:*)
+                EFFECTIVE_MONGO_URI="$DEPLOY_MONGO_URI"
+                ;;
+            esac
+            # If secret is Atlas but hostname resolves, use it; otherwise force local
+            if echo "$DEPLOY_MONGO_URI" | grep -q 'mongodb+srv://\|mongodb.net'; then
+              ATLAS_HOST=$(echo "$DEPLOY_MONGO_URI" | sed -E 's#^mongodb(\+srv)?://([^@]+@)?##' | cut -d/ -f1 | cut -d? -f1)
+              if getent hosts "$ATLAS_HOST" >/dev/null 2>&1 || nslookup "$ATLAS_HOST" 8.8.8.8 2>/dev/null | grep -q 'Address:'; then
+                EFFECTIVE_MONGO_URI="$DEPLOY_MONGO_URI"
+                echo "Atlas host resolves, using secret MONGO_URI"
+              else
+                echo "WARNING: Atlas host '$ATLAS_HOST' does not resolve (cluster deleted/paused). Using local Mongo instead."
+                EFFECTIVE_MONGO_URI="mongodb://mongodb:27017/phoenixeximm"
+              fi
+            fi
+
+            export DEPLOY_MONGO_URI="$EFFECTIVE_MONGO_URI"
+
             python3 - <<'PY'
             import os
             keys = [
@@ -81,19 +102,10 @@ jobs:
               val = os.environ.get(env_key, "")
               val = val.replace("mongodb://localhost:27017", "mongodb://mongodb:27017")
               val = val.replace("mongodb://127.0.0.1:27017", "mongodb://mongodb:27017")
-              # Escape backslashes and quotes for KEY="value"
               esc = val.replace("\\", "\\\\").replace('"', '\\"')
               lines.append(f'{out_key}="{esc}"')
             open(".env", "w", encoding="utf-8").write("\n".join(lines) + "\n")
-            host = os.environ.get("DEPLOY_MONGO_URI", "")
-            for prefix in ("mongodb+srv://", "mongodb://"):
-              if host.startswith(prefix):
-                host = host[len(prefix):]
-                break
-            if "@" in host:
-                host = host.split("@", 1)[1]
-            host = host.split("/")[0].split("?")[0]
-            print("Using MONGO host:", host)
+            print("Using MONGO_URI host:", os.environ.get("DEPLOY_MONGO_URI", "").split("@")[-1].split("/")[0])
             PY
             cp .env backend/.env
 
@@ -116,14 +128,17 @@ jobs:
             echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null || true
             echo "Building frontend..."
             sudo docker compose build frontend
-            echo "Starting backend + frontend (Atlas Mongo)..."
+
+            echo "Starting mongodb + backend + frontend..."
+            # Stop mongo during was already not needed; start all with local mongo
+            sudo docker compose up -d mongodb
+            sleep 5
             sudo docker compose up -d --no-deps --force-recreate backend frontend
             echo "Containers started"
-            # Prove DNS works for Atlas SRV from inside backend container
-            sudo docker exec phoenixeximm_backend nslookup _mongodb._tcp.cluster0.qhteyyh.mongodb.net 8.8.8.8 || true
             sudo docker compose ps
             sleep 8
             sudo docker logs phoenixeximm_backend --tail=80 || true
+            sudo docker logs phoenixeximm_mongodb --tail=20 || true
 
             ok=0
             for i in $(seq 1 40); do

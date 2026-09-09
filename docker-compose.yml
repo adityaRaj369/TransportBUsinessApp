@@ -10,8 +10,6 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
-    profiles:
-      - localmongo
 
   backend:
     build: ./backend
@@ -19,7 +17,6 @@ services:
     restart: always
     ports:
       - "5000:5000"
-    # Docker/Alpine often can't resolve mongodb+srv SRV records without public DNS
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -30,6 +27,8 @@ services:
       - PORT=5000
     volumes:
       - backend_uploads:/app/uploads
+    depends_on:
+      - mongodb
 
   frontend:
     build: ./frontend

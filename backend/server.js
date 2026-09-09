@@ -29,13 +29,52 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'phoenixeximm_secret_2026';
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongodb:27017/phoenixeximm';
 
+const DEFAULT_PRODUCTS = [
+  {
+    name: '1121 RAW BASMATI RICE',
+    category: 'Basmati Rice',
+    description: 'Premium long-grain basmati rice, aged for 2 years to perfection. Known for its exquisite aroma and extra-long grains.',
+    features: ['Aged 2 Years', 'Non-Sticky', 'Aromatic', 'Extra Long Grain'],
+    image: '/basmati_rice_premium.png'
+  },
+  {
+    name: '1718 STEAM BASMATI RICE',
+    category: 'Basmati Rice',
+    description: 'Steam processed to retain nutritional value while ensuring a firm texture and delightful taste.',
+    features: ['Steam Processed', 'High Fiber', 'Uniform Grain', 'Great Taste'],
+    image: '/basmati_rice_premium.png'
+  },
+  {
+    name: 'SUGANDHA GOLDEN SELLA RICE',
+    category: 'Non-Basmati Rice',
+    description: 'Premium quality non-basmati rice with a golden hue and excellent cooking characteristics.',
+    features: ['Golden Hue', 'Economical', 'Parboiled', 'Daily Consumption'],
+    image: '/basmati_rice_premium.png'
+  }
+];
+
+const DEFAULT_CATEGORIES = [
+  { name: 'Basmati Rice', description: 'Premium basmati varieties' },
+  { name: 'Non-Basmati Rice', description: 'Quality non-basmati rice' }
+];
+
+async function seedIfEmpty() {
+  if ((await Product.countDocuments()) === 0) {
+    await Product.insertMany(DEFAULT_PRODUCTS);
+    console.log('Seeded default products');
+  }
+  if ((await Category.countDocuments()) === 0) {
+    await Category.insertMany(DEFAULT_CATEGORIES);
+    console.log('Seeded default categories');
+  }
+}
+
 async function connectWithRetry(retries = 30) {
   for (let i = 1; i <= retries; i++) {
     try {
-      await mongoose.connect(MONGO_URI, {
-        serverSelectionTimeoutMS: 5000,
-      });
+      await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
       console.log('Connected to MongoDB:', MONGO_URI.replace(/\/\/.*@/, '//***@'));
+      await seedIfEmpty();
       return;
     } catch (err) {
       console.error(`MongoDB connect attempt ${i}/${retries} failed:`, err.message);
