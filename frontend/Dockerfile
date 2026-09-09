@@ -3,9 +3,10 @@ FROM node:20-alpine as build
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm install --no-audit --no-fund
 
 COPY . .
+ENV NODE_OPTIONS=--max-old-space-size=512
 RUN npm run build
 
 # Production stage
