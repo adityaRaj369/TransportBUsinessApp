@@ -62,20 +62,11 @@ jobs:
             set -e
             cd /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
-            # Root .env is what docker-compose reads on every fresh deploy
-            echo "MONGO_URI=${{ secrets.MONGO_URI }}" > .env
+            # Force Docker-network Mongo URI. Ignore secrets.MONGO_URI (often localhost/Atlas and breaks here).
+            echo "MONGO_URI=mongodb://mongodb:27017/phoenixeximm" > .env
             echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
             echo "ADMIN_USER=${{ secrets.ADMIN_USER }}" >> .env
             echo "ADMIN_PASS=${{ secrets.ADMIN_PASS }}" >> .env
-
-            # Inside Docker, localhost is wrong — always use the compose service name
-            sed -i 's|mongodb://localhost:27017|mongodb://mongodb:27017|g' .env
-            sed -i 's|mongodb://127.0.0.1:27017|mongodb://mongodb:27017|g' .env
-
-            if ! grep -q '^MONGO_URI=.\+' .env; then
-              sed -i '/^MONGO_URI=/d' .env
-              echo 'MONGO_URI=mongodb://mongodb:27017/phoenixeximm' >> .env
-            fi
 
             cp .env backend/.env
 
@@ -106,9 +97,21 @@ jobs:
             # Now start everything with builds already done
             sudo docker compose up -d
 
-            sleep 8
+            # Wait until products API works (Mongo ready + seeded)
+            ok=0
+            for i in $(seq 1 40); do
+              if curl -sf http://127.0.0.1:8080/api/products | grep -q '\['; then
+                ok=1
+                break
+              fi
+              echo "waiting for products API ($i)..."
+              sleep 3
+            done
+            sudo docker compose ps
+            sudo docker logs phoenixeximm_backend --tail=40 || true
+            sudo docker logs phoenixeximm_mongodb --tail=20 || true
+            test "$ok" = "1"
             curl -sf http://127.0.0.1:8080/ >/dev/null
-            curl -sf http://127.0.0.1:5000/ >/dev/null
 
             if ! command -v nginx &> /dev/null; then
               sudo apt-get update
