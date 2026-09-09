@@ -60,13 +60,26 @@ jobs:
             # Navigate to the project directory
             cd /home/${{ secrets.EC2_USER }}/phoenix-eximm
             
-            # Create/Update .env file in backend directory
-            echo "MONGO_URI=${{ secrets.MONGO_URI }}" > backend/.env
-            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> backend/.env
-            echo "ADMIN_USER=${{ secrets.ADMIN_USER }}" >> backend/.env
-            echo "ADMIN_PASS=${{ secrets.ADMIN_PASS }}" >> backend/.env
+            # Root .env is what docker-compose reads on every fresh deploy
+            echo "MONGO_URI=${{ secrets.MONGO_URI }}" > .env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+            echo "ADMIN_USER=${{ secrets.ADMIN_USER }}" >> .env
+            echo "ADMIN_PASS=${{ secrets.ADMIN_PASS }}" >> .env
+
+            # Inside Docker, localhost is wrong — always use the compose service name
+            sed -i 's|mongodb://localhost:27017|mongodb://mongodb:27017|g' .env
+            sed -i 's|mongodb://127.0.0.1:27017|mongodb://mongodb:27017|g' .env
+
+            # If secret is empty, default to the persistent local Mongo volume
+            if ! grep -q '^MONGO_URI=.\+' .env; then
+              sed -i '/^MONGO_URI=/d' .env
+              echo 'MONGO_URI=mongodb://mongodb:27017/phoenixeximm' >> .env
+            fi
+
+            # Keep backend/.env in sync for dotenv fallback
+            cp .env backend/.env
             
-            # Build and restart Docker containers
+            # Rebuild from scratch but keep named volumes (Mongo data stays)
             sudo docker compose down
             sudo docker compose up -d --build
 
