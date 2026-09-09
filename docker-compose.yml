@@ -19,7 +19,10 @@ services:
     restart: always
     ports:
       - "5000:5000"
-    # Pass secrets via env_file so Atlas URIs with $ & ? are not re-interpolated by Compose
+    # Docker/Alpine often can't resolve mongodb+srv SRV records without public DNS
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     env_file:
       - .env
     environment:

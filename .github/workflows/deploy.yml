@@ -116,9 +116,11 @@ jobs:
             echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null || true
             echo "Building frontend..."
             sudo docker compose build frontend
-            echo "Starting backend + frontend (Atlas Mongo, no local DB)..."
-            sudo docker compose up -d --no-deps backend frontend
+            echo "Starting backend + frontend (Atlas Mongo)..."
+            sudo docker compose up -d --no-deps --force-recreate backend frontend
             echo "Containers started"
+            # Prove DNS works for Atlas SRV from inside backend container
+            sudo docker exec phoenixeximm_backend nslookup _mongodb._tcp.cluster0.qhteyyh.mongodb.net 8.8.8.8 || true
             sudo docker compose ps
             sleep 8
             sudo docker logs phoenixeximm_backend --tail=80 || true
