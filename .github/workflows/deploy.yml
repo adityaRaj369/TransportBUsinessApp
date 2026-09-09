@@ -29,10 +29,12 @@ jobs:
               sudo rm -rf phoenix-eximm
             fi
 
-            # Light cleanup only — full prune forces huge rebuilds that OOM small EC2s
-            sudo docker container prune -f || true
-            sudo docker image prune -f || true
+            # Free disk (keep named volumes so Mongo data survives)
+            sudo docker builder prune -af || true
+            sudo docker system prune -af || true
             sudo journalctl --vacuum-time=1d || true
+            sudo apt-get clean || true
+            df -h
 
             mkdir -p /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
@@ -81,15 +83,15 @@ jobs:
             sudo sync || true
             echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null || true
             sudo docker compose down || true
+            df -h
 
-            # Build one service at a time to avoid OOM, then start
+            # Start mongo first (pull while disk is free), then build apps one-by-one
             export COMPOSE_PARALLEL_LIMIT=1
-            sudo docker compose build mongodb || true
-            sudo docker compose pull mongodb
+            sudo docker compose up -d mongodb
             sudo docker compose build backend
             echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null || true
             sudo docker compose build frontend
-            sudo docker compose up -d --no-build
+            sudo docker compose up -d
 
             sleep 8
             curl -sf http://127.0.0.1:8080/ >/dev/null
