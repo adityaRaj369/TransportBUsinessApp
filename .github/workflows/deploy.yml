@@ -62,11 +62,23 @@ jobs:
             set -e
             cd /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
-            # Force Docker-network Mongo URI. Ignore secrets.MONGO_URI (often localhost/Atlas and breaks here).
-            echo "MONGO_URI=mongodb://mongodb:27017/phoenixeximm" > .env
+            # Root .env is what docker-compose reads (this was the real bug — secret never reached the container)
+            echo "MONGO_URI=${{ secrets.MONGO_URI }}" > .env
             echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
             echo "ADMIN_USER=${{ secrets.ADMIN_USER }}" >> .env
             echo "ADMIN_PASS=${{ secrets.ADMIN_PASS }}" >> .env
+
+            # Only rewrite localhost → docker service name. Leave Atlas (mongodb+srv) untouched.
+            sed -i 's|mongodb://localhost:27017|mongodb://mongodb:27017|g' .env
+            sed -i 's|mongodb://127.0.0.1:27017|mongodb://mongodb:27017|g' .env
+
+            if ! grep -q '^MONGO_URI=.\+' .env; then
+              echo "ERROR: GitHub secret MONGO_URI is empty" >&2
+              exit 1
+            fi
+
+            # Log host only (no credentials)
+            echo "Using MONGO host:" $(grep '^MONGO_URI=' .env | sed -E 's|^MONGO_URI=mongodb(\+srv)?://([^@/]+@)?||; s|/.*||')
 
             cp .env backend/.env
 
@@ -84,18 +96,29 @@ jobs:
             df -h
             free -h
 
-            # Pull/start mongo only to cache the image, then STOP it before builds
+            # Pull/start local mongo only if URI points at it; Atlas needs no local DB (saves RAM)
             export COMPOSE_PARALLEL_LIMIT=1
-            sudo docker compose pull mongodb
-            sudo docker compose up -d mongodb
-            sudo docker compose stop mongodb
+            USE_LOCAL_MONGO=0
+            if grep -Eq '^MONGO_URI=mongodb://(mongodb|localhost|127\.0\.0\.1):27017' .env; then
+              USE_LOCAL_MONGO=1
+            fi
+
+            if [ "$USE_LOCAL_MONGO" = "1" ]; then
+              sudo docker compose pull mongodb
+              sudo docker compose up -d mongodb
+              sudo docker compose stop mongodb
+            fi
 
             sudo docker compose build backend
             echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null || true
             sudo docker compose build frontend
 
-            # Now start everything with builds already done
-            sudo docker compose up -d
+            if [ "$USE_LOCAL_MONGO" = "1" ]; then
+              sudo docker compose up -d
+            else
+              # Atlas / remote Mongo — do not start local mongodb container
+              sudo docker compose up -d --no-deps backend frontend
+            fi
 
             # Wait until products API works (Mongo ready + seeded)
             ok=0
