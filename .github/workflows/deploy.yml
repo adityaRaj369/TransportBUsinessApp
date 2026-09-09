@@ -82,6 +82,9 @@ jobs:
             # Rebuild from scratch but keep named volumes (Mongo data stays)
             sudo docker compose down
             sudo docker compose up -d --build
+            sudo docker compose ps
+            sleep 5
+            curl -sf http://127.0.0.1:8080/ >/dev/null || (sudo docker compose logs --tail=50 && exit 1)
 
             # Install Nginx on the host if not already installed
             if ! command -v nginx &> /dev/null; then
