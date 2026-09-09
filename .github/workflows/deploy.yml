@@ -28,19 +28,14 @@ jobs:
               cd ..
               sudo rm -rf phoenix-eximm
             fi
-
-            # Free disk (keep named volumes so Mongo data survives)
             sudo docker builder prune -af || true
             sudo docker system prune -af || true
             sudo journalctl --vacuum-time=1d || true
-            sudo apt-get clean || true
-            df -h
-
             mkdir -p /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
       - name: Delete .git directory before copy
         run: rm -rf .git
-        
+
       - name: Copy files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -52,38 +47,56 @@ jobs:
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_MONGO_URI: ${{ secrets.MONGO_URI }}
+          DEPLOY_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DEPLOY_ADMIN_USER: ${{ secrets.ADMIN_USER }}
+          DEPLOY_ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 30m
-          script_stop: true
+          envs: DEPLOY_MONGO_URI,DEPLOY_JWT_SECRET,DEPLOY_ADMIN_USER,DEPLOY_ADMIN_PASS
           script: |
             set -e
             cd /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
-            # Quote values — Atlas URIs contain & ? = which break unquoted .env parsing
-            {
-              echo "MONGO_URI=\"${{ secrets.MONGO_URI }}\""
-              echo "JWT_SECRET=\"${{ secrets.JWT_SECRET }}\""
-              echo "ADMIN_USER=\"${{ secrets.ADMIN_USER }}\""
-              echo "ADMIN_PASS=\"${{ secrets.ADMIN_PASS }}\""
-            } > .env
-
-            # Only rewrite localhost → docker service name. Leave Atlas untouched.
-            sed -i 's|mongodb://localhost:27017|mongodb://mongodb:27017|g' .env
-            sed -i 's|mongodb://127.0.0.1:27017|mongodb://mongodb:27017|g' .env
-
-            if ! grep -q '^MONGO_URI=".\+"$' .env && ! grep -q '^MONGO_URI=.\+' .env; then
-              echo "ERROR: GitHub secret MONGO_URI is empty" >&2
+            if [ -z "$DEPLOY_MONGO_URI" ]; then
+              echo "ERROR: GitHub secret MONGO_URI is empty"
               exit 1
             fi
 
-            echo "Using MONGO host:" $(grep '^MONGO_URI=' .env | sed -E 's|^MONGO_URI="?mongodb(\+srv)?://([^@/]+@)?||; s|[/?].*||; s|"$||')
-
+            # Write .env for container env_file (no Compose ${} re-interpolation of Atlas URI)
+            python3 - <<'PY'
+            import os
+            keys = [
+              ("MONGO_URI", "DEPLOY_MONGO_URI"),
+              ("JWT_SECRET", "DEPLOY_JWT_SECRET"),
+              ("ADMIN_USER", "DEPLOY_ADMIN_USER"),
+              ("ADMIN_PASS", "DEPLOY_ADMIN_PASS"),
+            ]
+            lines = []
+            for out_key, env_key in keys:
+              val = os.environ.get(env_key, "")
+              val = val.replace("mongodb://localhost:27017", "mongodb://mongodb:27017")
+              val = val.replace("mongodb://127.0.0.1:27017", "mongodb://mongodb:27017")
+              # Escape backslashes and quotes for KEY="value"
+              esc = val.replace("\\", "\\\\").replace('"', '\\"')
+              lines.append(f'{out_key}="{esc}"')
+            open(".env", "w", encoding="utf-8").write("\n".join(lines) + "\n")
+            host = os.environ.get("DEPLOY_MONGO_URI", "")
+            for prefix in ("mongodb+srv://", "mongodb://"):
+              if host.startswith(prefix):
+                host = host[len(prefix):]
+                break
+            if "@" in host:
+                host = host.split("@", 1)[1]
+            host = host.split("/")[0].split("?")[0]
+            print("Using MONGO host:", host)
+            PY
             cp .env backend/.env
 
-            # Tiny EC2 (~1GB RAM): add swap so vite build doesn't get OOM-killed
             if [ ! -f /swapfile ]; then
               sudo fallocate -l 1G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
               sudo chmod 600 /swapfile
@@ -97,51 +110,38 @@ jobs:
             df -h
             free -h
 
-            # Pull/start local mongo only if URI points at it; Atlas needs no local DB (saves RAM)
             export COMPOSE_PARALLEL_LIMIT=1
-            USE_LOCAL_MONGO=0
-            if grep -Eq '^MONGO_URI=mongodb://(mongodb|localhost|127\.0\.0\.1):27017' .env; then
-              USE_LOCAL_MONGO=1
-            fi
-
-            if [ "$USE_LOCAL_MONGO" = "1" ]; then
-              sudo docker compose pull mongodb
-              sudo docker compose up -d mongodb
-              sudo docker compose stop mongodb
-            fi
-
+            echo "Building backend..."
             sudo docker compose build backend
             echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null || true
+            echo "Building frontend..."
             sudo docker compose build frontend
+            echo "Starting backend + frontend (Atlas Mongo, no local DB)..."
+            sudo docker compose up -d --no-deps backend frontend
+            echo "Containers started"
+            sudo docker compose ps
+            sleep 8
+            sudo docker logs phoenixeximm_backend --tail=80 || true
 
-            if [ "$USE_LOCAL_MONGO" = "1" ]; then
-              sudo docker compose up -d
-            else
-              # Atlas / remote Mongo — do not start local mongodb container
-              sudo docker compose up -d --no-deps backend frontend
-            fi
-
-            sleep 5
-            sudo docker compose ps || true
-            sudo docker logs phoenixeximm_backend --tail=50 || true
-
-            # Wait until products API works (Mongo ready + seeded)
             ok=0
             for i in $(seq 1 40); do
-              if curl -sf http://127.0.0.1:8080/api/products | grep -q '\['; then
-                ok=1
-                break
-              fi
-              echo "waiting for products API ($i)..."
+              body=$(curl -s http://127.0.0.1:8080/api/products || true)
+              echo "products attempt $i: ${body:0:120}"
+              case "$body" in
+                \[*) ok=1; break ;;
+              esac
               sleep 3
             done
-            sudo docker compose ps
-            sudo docker logs phoenixeximm_backend --tail=40 || true
-            sudo docker logs phoenixeximm_mongodb --tail=20 || true
-            test "$ok" = "1"
+
+            if [ "$ok" != "1" ]; then
+              echo "Products API did not become healthy"
+              sudo docker logs phoenixeximm_backend --tail=100 || true
+              exit 1
+            fi
+
             curl -sf http://127.0.0.1:8080/ >/dev/null
 
-            if ! command -v nginx &> /dev/null; then
+            if ! command -v nginx >/dev/null 2>&1; then
               sudo apt-get update
               sudo apt-get install nginx -y
             fi
@@ -161,7 +161,7 @@ jobs:
             sudo rm -f /etc/nginx/sites-enabled/default
             sudo systemctl restart nginx
 
-            if ! command -v certbot &> /dev/null; then
+            if ! command -v certbot >/dev/null 2>&1; then
               sudo apt-get install certbot python3-certbot-nginx -y
             fi
 
