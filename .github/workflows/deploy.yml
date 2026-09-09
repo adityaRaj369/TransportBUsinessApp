@@ -62,23 +62,24 @@ jobs:
             set -e
             cd /home/${{ secrets.EC2_USER }}/phoenix-eximm
 
-            # Root .env is what docker-compose reads (this was the real bug — secret never reached the container)
-            echo "MONGO_URI=${{ secrets.MONGO_URI }}" > .env
-            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
-            echo "ADMIN_USER=${{ secrets.ADMIN_USER }}" >> .env
-            echo "ADMIN_PASS=${{ secrets.ADMIN_PASS }}" >> .env
+            # Quote values — Atlas URIs contain & ? = which break unquoted .env parsing
+            {
+              echo "MONGO_URI=\"${{ secrets.MONGO_URI }}\""
+              echo "JWT_SECRET=\"${{ secrets.JWT_SECRET }}\""
+              echo "ADMIN_USER=\"${{ secrets.ADMIN_USER }}\""
+              echo "ADMIN_PASS=\"${{ secrets.ADMIN_PASS }}\""
+            } > .env
 
-            # Only rewrite localhost → docker service name. Leave Atlas (mongodb+srv) untouched.
+            # Only rewrite localhost → docker service name. Leave Atlas untouched.
             sed -i 's|mongodb://localhost:27017|mongodb://mongodb:27017|g' .env
             sed -i 's|mongodb://127.0.0.1:27017|mongodb://mongodb:27017|g' .env
 
-            if ! grep -q '^MONGO_URI=.\+' .env; then
+            if ! grep -q '^MONGO_URI=".\+"$' .env && ! grep -q '^MONGO_URI=.\+' .env; then
               echo "ERROR: GitHub secret MONGO_URI is empty" >&2
               exit 1
             fi
 
-            # Log host only (no credentials)
-            echo "Using MONGO host:" $(grep '^MONGO_URI=' .env | sed -E 's|^MONGO_URI=mongodb(\+srv)?://([^@/]+@)?||; s|/.*||')
+            echo "Using MONGO host:" $(grep '^MONGO_URI=' .env | sed -E 's|^MONGO_URI="?mongodb(\+srv)?://([^@/]+@)?||; s|[/?].*||; s|"$||')
 
             cp .env backend/.env
 
@@ -119,6 +120,10 @@ jobs:
               # Atlas / remote Mongo — do not start local mongodb container
               sudo docker compose up -d --no-deps backend frontend
             fi
+
+            sleep 5
+            sudo docker compose ps || true
+            sudo docker logs phoenixeximm_backend --tail=50 || true
 
             # Wait until products API works (Mongo ready + seeded)
             ok=0
